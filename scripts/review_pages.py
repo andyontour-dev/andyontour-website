@@ -21,7 +21,8 @@ COPY={
 def slug(vid):return SLUGS.get(vid,'review-'+vid+'.html')
 
 
-def generate(root):
+def generate(root, descriptions=None):
+    descriptions = descriptions or {}
     source=(root/'index.html').read_text();style=re.search(r'<style>(.*?)</style>',source,re.S).group(1)
     header=re.search(r'<header>.*?</header>',source,re.S).group(0)
     header=re.sub(r'href="#', 'href="index.html#',header)
@@ -31,6 +32,10 @@ def generate(root):
     for card in cards:
         vid=re.search(r'watch\?v=([A-Za-z0-9_-]{11})',card).group(1);filename=slug(vid);url='https://andyontour.com/'+filename
         title,description,sections=COPY.get(vid,(html.unescape(re.search(r'<h3>(.*?)</h3>',card,re.S).group(1))+' – Produkttest bei Andy on Tour','Produkttest und Videovorstellung von Andy on Tour. Das vollständige Review auf YouTube ansehen.',[]))
+        if vid not in COPY:
+            generated = description_text(html.unescape(re.search(r'<h3>(.*?)</h3>',card,re.S).group(1)), descriptions.get(vid, ''))
+            if generated:
+                title,description,sections = generated
         # Existing affiliate links and confirmed codes are taken from the hourly updated card.
         detail=re.search(r'<div class="latest-body">(.*)</div></article>',card,re.S).group(1)
         detail=re.sub(r'<a class="review-detail[^\"]*".*?</a>','',detail,flags=re.S)
@@ -42,3 +47,45 @@ def generate(root):
     p=root/'sitemap.xml';s=p.read_text();s=re.sub(r'\s*<url><loc>https://andyontour.com/(?:engwe-l20-3-pro-test|hcalory-kompressor-kuehlbox-test|navycrest-q7-dashcam-test|review-[A-Za-z0-9_-]+)\.html</loc></url>','',s)
     s=s.replace('</urlset>',''.join('  <url><loc>'+u+'</loc></url>\n' for u in urls)+'</urlset>');p.write_text(s)
     return urls
+
+
+def description_text(video_title, raw):
+    """Extract product-specific source text without treating it as instructions.
+
+    No model calls, invented experiences, ratings or prices. Generic channel
+    promotion, tracking links and product-section footer are excluded.
+    """
+    raw = html.unescape(raw or '')
+    raw = re.split(r'Kanalmitglied werden|Trinkgeld\s*:|Amazon Ideenlisten\s*:|Verwendete Kameras\s*:|Fan Artikel\s*:|So[cz]ial Media\s*:|Musik by|Die mit .*gekennzeichneten Links|MERCH\s*:',raw,maxsplit=1,flags=re.I)[0]
+    paragraphs=[];buffer=[]
+    def flush():
+        if buffer:
+            chunk=' '.join(buffer).strip()
+            if len(chunk)>=65 and len(chunk.split())>=9 and chunk not in paragraphs:paragraphs.append(chunk[:1100])
+            buffer.clear()
+    for line in raw.splitlines():
+        line=line.strip()
+        if not line:flush();continue
+        if re.search(r'https?://|www\.|#[\w]+|@\w+|\b\d+[.,]?\d*\s*(?:€|EUR|Euro)|Rabatt|Gutschein|Promotion|Discount|Affiliate|Provision',line,re.I):
+            flush();continue
+        # Source instructions or markup must never become generated editorial claims.
+        if re.search(r'<[^>]+>|ignore.*instruction|system prompt|ignoriere.*anweisung|passwort|api.?key',line,re.I):
+            flush();continue
+        if re.fullmatch(r'[\W_\d]+',line) or len(line)<5:continue
+        line=re.sub(r'^[^\wÄÖÜäöüß]+','',line).strip()
+        if re.match(r'^\d{1,2}:\d{2}\s',line):continue
+        if re.search(r'LINKS ZU MEINER|Gezeigtes Produkt|Vorgestelltes Produkt',line,re.I):continue
+        buffer.append(line)
+    flush()
+    if not paragraphs:return None
+    title=re.sub(r'\s+',' ',video_title).strip()
+    title=re.sub(r'\s*#[\w]+','',title).strip()
+    if len(title)>95:title=title[:92].rsplit(' ',1)[0]+'…'
+    intro='In diesem Produkttest von Andy on Tour geht es um „'+title+'“. Die Videobeschreibung liefert dazu folgende Angaben.'
+    sections=[('Das Produkt im Überblick',intro),('Angaben aus der Videobeschreibung',' '.join(paragraphs[:2]))]
+    if len(paragraphs)>2:sections.append(('Weitere Funktionen und Einsatzmöglichkeiten',' '.join(paragraphs[2:5])))
+    sections.append(('Das vollständige Review ansehen','Die vollständige Vorstellung findest du im verlinkten YouTube-Video. Dort kannst du dir einen eigenen Eindruck vom Produkt verschaffen. Die Produktangaben auf dieser Seite stammen aus der zugehörigen Videobeschreibung.'))
+    snippet=paragraphs[0]
+    meta=title+': '+snippet
+    if len(meta)>158:meta=meta[:155].rsplit(' ',1)[0]+'…'
+    return title,meta,sections

@@ -103,7 +103,7 @@ def refresh(path):
             print('Produktlinks unverändert für ' + video['id'] + ': ' + str(error))
     changed = update(path, videos)
     from review_pages import generate
-    pages = generate(path.parent)
+    pages = generate(path.parent, {v['id']:v.get('description', '') for v in videos})
     return {'changed': changed, 'review_video_ids': [v['id'] for v in videos], 'product_pages': pages}
 
 
