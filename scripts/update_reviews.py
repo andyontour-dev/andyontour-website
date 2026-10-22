@@ -70,7 +70,12 @@ def update(path, videos):
         match = re.search(r'watch\?v=([A-Za-z0-9_-]{11})', card)
         if match: known[match.group(1)] = card
     # Keep checked product descriptions, affiliate links and discount codes intact.
-    parts = [known.get(v['id']) or render_card(v) for v in videos]
+    parts = []
+    for v in videos:
+        card = known.get(v['id']) or render_card(v)
+        if 'description' in v:
+            card = sync_product_links(card, v['description'])
+        parts.append(card)
     result = before + START + ''.join(parts) + END + after
     if result != original:
         tmp = path.with_suffix('.reviews.tmp'); tmp.write_text(result, encoding='utf-8'); tmp.replace(path)
@@ -83,4 +88,66 @@ def refresh(path):
         page = response.read(8_000_001)
     if len(page) > 8_000_000: raise ValueError('Playlist-Antwort zu groß')
     videos = parse_playlist(page.decode('utf-8'))
+    for video in videos:
+        try:
+            request = urllib.request.Request('https://www.youtube.com/watch?v=' + video['id'], headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'de-DE,de;q=0.9'})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                raw = response.read(8_000_001)
+            if len(raw) > 8_000_000: raise ValueError('Videoantwort zu groß')
+            video['description'] = read_description(raw.decode('utf-8'), video['id'])
+        except Exception as error:
+            print('Produktlinks unverändert für ' + video['id'] + ': ' + str(error))
     return {'changed': update(path, videos), 'review_video_ids': [v['id'] for v in videos]}
+
+
+def read_description(page, video_id):
+    match = re.search(r'(?:var\s+ytInitialPlayerResponse\s*=|ytInitialPlayerResponse\s*=)\s*', page)
+    if not match: raise ValueError('Videobeschreibung nicht lesbar')
+    data, _ = json.JSONDecoder().raw_decode(page[match.end():])
+    details = data.get('videoDetails', {})
+    if details.get('videoId') != video_id or not isinstance(details.get('shortDescription'), str):
+        raise ValueError('Videobeschreibung nicht eindeutig')
+    return details['shortDescription']
+
+
+def product_links(description):
+    # Only the primary product section, never the channel's general equipment list.
+    description = re.split(r'Trinkgeld\s*:|Kanalmitglied werden|Amazon Ideenlisten\s*:|Verwendete Kameras\s*:|Produktmerkmale\s*:|Fan Artikel\s*:', description, maxsplit=1, flags=re.I)[0]
+    links = []
+    from urllib.parse import urlsplit
+    for line in description.splitlines():
+        for raw in re.findall(r'https?://[^\s<>]+', line):
+            url = raw.rstrip('.,;!)]}')
+            parts = urlsplit(url)
+            host = (parts.hostname or '').lower()
+            allowed = host in ('amzn.to', 'amzn.eu', 'link.amazon', 'amazon.de', 'www.amazon.de', 'de.engwe.com', 'engwe.com')
+            if not allowed or parts.username or parts.password or '...' in url or parts.scheme != 'https': continue
+            if any(v['url'] == url for v in links): continue
+            label = re.sub(r'https?://[^\s<>]+', '', line).strip(' ➡️❌:*–-')
+            size = re.search(r'\b(35|45|55)\s*(?:Liter|L)\b', label, re.I)
+            key = size.group(1) if size else ('de' if host == 'de.engwe.com' or '(DE)' in label else 'primary')
+            links.append({'url': url, 'key': key, 'label': label})
+    return links
+
+
+def sync_product_links(card, description):
+    links = product_links(description)
+    if not links: return card
+    match = re.search(r'<div class="review-links">(.*?)</div>', card, re.S)
+    if match:
+        def replace_link(anchor):
+            label = html.unescape(re.sub('<[^>]+>', '', anchor.group(0)))
+            size = re.search(r'\b(35|45|55)\s*Liter\b', label, re.I)
+            if size: candidates = [v for v in links if v['key'] == size.group(1)]
+            elif 'E-Bike' in label: candidates = [v for v in links if v['key'] == 'de'] or links
+            else: candidates = links
+            # Multiple unrelated URLs must not silently replace one product button.
+            if len(candidates) != 1: return anchor.group(0)
+            return re.sub(r'href="[^"]*"', 'href="'+html.escape(candidates[0]['url'], quote=True)+'"', anchor.group(0), count=1)
+        content = re.sub(r'<a\b[^>]*>.*?</a>', replace_link, match.group(1), flags=re.S)
+        return card[:match.start(1)] + content + card[match.end(1):]
+    # For new reviews only an unambiguous primary product is inserted automatically.
+    if len(links) == 1:
+        block = '<div class="review-links"><a href="'+html.escape(links[0]['url'], quote=True)+'" rel="sponsored noopener" target="_blank">Zum Produkt · Affiliate-Link ↗</a></div>'
+        card = card.replace('</div></article>', block+'</div></article>')
+    return card

@@ -23,3 +23,22 @@ class ReviewsTest(unittest.TestCase):
         with self.assertRaises(ValueError): parse_playlist(self.page([]))
     def test_duplicate_removed(self):
         self.assertEqual(len(parse_playlist(self.page([('618EbQxiSLo','x')]*2))),1)
+
+from update_reviews import sync_product_links, read_description
+
+class ProductLinksTest(unittest.TestCase):
+    def card(self, label='Zur Dashcam'):
+        return '<article><div class="review-links"><a href="https://amzn.to/old" rel="sponsored noopener">'+label+' · Affiliate-Link</a></div><p>Code Andy</p></article>'
+    def test_replacement_and_equipment_exclusion(self):
+        result=sync_product_links(self.card(), 'Vorgestelltes Produkt:\nDashcam https://amzn.to/new\nKanalmitglied werden\nKamera https://amzn.to/other')
+        self.assertIn('https://amzn.to/new',result); self.assertNotIn('https://amzn.to/other',result);self.assertIn('Code Andy',result)
+    def test_size_assignment(self):
+        result=sync_product_links(self.card('45 Liter'), '35 Liter https://amzn.to/a\n45 Liter https://amzn.to/b\n55 Liter https://amzn.to/c')
+        self.assertIn('href="https://amzn.to/b"',result)
+    def test_missing_ambiguous_or_untrusted_preserved(self):
+        for description in ('', 'https://evil.example/a', 'https://amzn.to/a\nhttps://amzn.to/b'):
+            self.assertEqual(sync_product_links(self.card(),description),self.card())
+    def test_description_id_checked(self):
+        page='var ytInitialPlayerResponse = '+json.dumps({'videoDetails':{'videoId':'618EbQxiSLo','shortDescription':'https://amzn.to/new'}})
+        self.assertEqual(read_description(page,'618EbQxiSLo'),'https://amzn.to/new')
+        with self.assertRaises(ValueError):read_description(page,'wrong')
