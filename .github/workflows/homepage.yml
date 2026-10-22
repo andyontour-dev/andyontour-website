@@ -29,7 +29,7 @@ jobs:
       - name: Öffentliche Homepage zusammenstellen
         run: |
           mkdir _site
-          cp index.html datenschutz.html nutzungsbedingungen.html impressum.html CNAME favicon.ico apple-touch-icon.png _site/
+          cp index.html lkw.html simson.html robots.txt sitemap.xml datenschutz.html nutzungsbedingungen.html impressum.html CNAME favicon.ico apple-touch-icon.png _site/
           cp -R assets _site/assets
       - uses: actions/upload-pages-artifact@v4
         with:
