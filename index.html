@@ -29,6 +29,16 @@
       font-size: 14px;
       color: #d1d5db;
     }
+    footer nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 24px;
+      margin-top: 12px;
+    }
+    footer a:hover,
+    footer a:focus-visible {
+      color: #fbbf24;
+    }
   </style>
 </head>
 <body>
@@ -62,6 +72,10 @@
 
     <footer>
       © 2026 Andy on Tour
+      <nav aria-label="Rechtliche Informationen">
+        <a href="datenschutz.html">Datenschutz</a>
+        <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a>
+      </nav>
     </footer>
   </main>
 </body>
