@@ -125,6 +125,12 @@ def main():
         page = page.decode('utf-8')
     videos = parse_videos(page)
     changed = update(args.html, videos)
+    if not args.fixture:
+        try:
+            from update_reviews import refresh
+            print(json.dumps(refresh(args.html), ensure_ascii=False))
+        except Exception as error:
+            print('Review-Playlist vorübergehend nicht aktualisiert: ' + str(error))
     print(json.dumps({'changed': changed, 'video_ids': [v['id'] for v in videos]}, ensure_ascii=False))
 
 
