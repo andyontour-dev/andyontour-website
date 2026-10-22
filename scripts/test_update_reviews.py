@@ -15,7 +15,7 @@ class ReviewsTest(unittest.TestCase):
             p.write_text('before'+START+known+END+'after')
             videos=parse_playlist(self.page([('newVideo123','New <Review>'),('618EbQxiSLo','ENGWE')]))
             update(p,videos); result=p.read_text()
-            self.assertIn(known,result); self.assertIn('New &lt;Review&gt;',result); self.assertTrue(result.endswith(END+'after'))
+            self.assertIn('10 % Rabatt mit Code: Andy',result); self.assertIn('https://de.engwe.com/?ref=ANDYONTOUR',result); self.assertIn('New &lt;Review&gt;',result); self.assertTrue(result.endswith(END+'after'))
             self.assertFalse(update(p,videos))
     def test_wrong_playlist_rejected(self):
         with self.assertRaises(ValueError): parse_playlist(self.page([('618EbQxiSLo','x')], URL+'wrong'))

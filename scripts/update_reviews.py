@@ -75,6 +75,10 @@ def update(path, videos):
         card = known.get(v['id']) or render_card(v)
         if 'description' in v:
             card = sync_product_links(card, v['description'])
+        from review_pages import slug
+        detail = '<a class="review-detail text-link" href="' + slug(v['id']) + '">Ausführlicher Produkttest →</a>'
+        card = re.sub(r'<a class="review-detail.*?</a>', '', card, flags=re.S)
+        card = card.replace('</div></article>', detail + '</div></article>')
         parts.append(card)
     result = before + START + ''.join(parts) + END + after
     if result != original:
@@ -97,7 +101,10 @@ def refresh(path):
             video['description'] = read_description(raw.decode('utf-8'), video['id'])
         except Exception as error:
             print('Produktlinks unverändert für ' + video['id'] + ': ' + str(error))
-    return {'changed': update(path, videos), 'review_video_ids': [v['id'] for v in videos]}
+    changed = update(path, videos)
+    from review_pages import generate
+    pages = generate(path.parent)
+    return {'changed': changed, 'review_video_ids': [v['id'] for v in videos], 'product_pages': pages}
 
 
 def read_description(page, video_id):
