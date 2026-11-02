@@ -121,9 +121,10 @@ def product_links(description):
     # Only the primary product section, never the channel's general equipment list.
     description = re.split(r'Trinkgeld\s*:|Kanalmitglied werden|Amazon Ideenlisten\s*:|Verwendete Kameras\s*:|Produktmerkmale\s*:|Fan Artikel\s*:', description, maxsplit=1, flags=re.I)[0]
     # Andys ausdrückliche Produktmarkierung hat Vorrang vor Ausrüstungslisten.
-    primary = re.search(r'^\s*Gezeigtes\s+Produkt\s*:?\s*(https?://[^\s<>]+)', description, re.I | re.M)
+    primary = re.search(r'^\s*Gezeigtes\s+Produkt\s*:?([^\n]*(?:\n(?!\s*\n)[^\n]*)?)', description, re.I | re.M)
     if primary:
-        description = 'Gezeigtes Produkt: ' + primary.group(1)
+        # Produktname, Pfeile und Affiliate-Kennzeichnung dürfen vor dem Link stehen.
+        description = primary.group(1)
     links = []
     from urllib.parse import urlsplit
     for line in description.splitlines():
