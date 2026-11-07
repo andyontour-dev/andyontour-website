@@ -74,7 +74,10 @@ def update(path, videos):
     for v in videos:
         card = known.get(v['id']) or render_card(v)
         if 'description' in v:
-            card = sync_product_links(card, v['description'])
+            description = v['description']
+            if v['id'] == 'oGTKBS0nJ5o':
+                description = 'Gezeigtes Produkt: https://viofo.sjv.io/jR7bqe'
+            card = sync_product_links(card, description)
         from review_pages import slug
         detail = '<a class="review-detail text-link" href="' + slug(v['id']) + '">Ausführlicher Produkttest →</a>'
         card = re.sub(r'<a class="review-detail.*?</a>', '', card, flags=re.S)
@@ -132,7 +135,7 @@ def product_links(description):
             url = raw.rstrip('.,;!)]}')
             parts = urlsplit(url)
             host = (parts.hostname or '').lower()
-            allowed = host in ('amzn.to', 'amzn.eu', 'link.amazon', 'amazon.de', 'www.amazon.de', 'de.engwe.com', 'engwe.com')
+            allowed = host in ('amzn.to', 'amzn.eu', 'link.amazon', 'amazon.de', 'www.amazon.de', 'viofo.sjv.io', 'de.engwe.com', 'engwe.com')
             if not allowed or parts.username or parts.password or '...' in url or parts.scheme != 'https': continue
             if any(v['url'] == url for v in links): continue
             label = re.sub(r'https?://[^\s<>]+', '', line).strip(' ➡️❌:*–-')
